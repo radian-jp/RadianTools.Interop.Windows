@@ -40,28 +40,30 @@ public class ShellImageList
         if( !User32.GetIconInfo(hIcon, out var iconInfo) )
             throw new Win32Exception($"GetIconInfo failed.");
 
-        Gdi32.GetObject(iconInfo.hbmColor, Marshal.SizeOf<BITMAP>(), out var bm);
         var hdc = User32.GetDC(HWND.Null);
         try
         {
             BITMAPINFOHEADER bmh = new BITMAPINFOHEADER();
-            bmh.biSize = (uint)Marshal.SizeOf(typeof(BITMAPINFOHEADER));
-            bmh.biWidth = bm.bmWidth;
-            bmh.biHeight = -bm.bmHeight; // 上下反転
-            bmh.biPlanes = 1;
-            bmh.biBitCount = 32;
-            bmh.biCompression = 0; // BI_RGB
-            
-            byte[] pixels = ArrayPool<byte>.Shared.Rent(bmh.biWidth * bmh.biHeight * 4);
+            bmh.biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>();
+            var result = Gdi32.GetDIBits(hdc, iconInfo.hbmColor, 0, 0, IntPtr.Zero, ref bmh, DIB_COLORS.DIB_RGB_COLORS);
+
+            if ( bmh.biHeight>0 )
+            {
+                bmh.biHeight = -bmh.biHeight; // 上下反転
+            }
+            int width = bmh.biWidth;
+            int height = -bmh.biHeight;
+
+            var pixels = ArrayPool<byte>.Shared.Rent(width * height * 4);
             try
             {
-                Gdi32.GetDIBits(hdc, iconInfo.hbmColor, 0, (uint)bmh.biHeight, pixels, in bmh, DIB_COLORS.DIB_RGB_COLORS);
+                Gdi32.GetDIBits(hdc, iconInfo.hbmColor, 0, (uint)height, pixels, ref bmh, DIB_COLORS.DIB_RGB_COLORS);
                 unsafe
                 {
 
                     fixed(void* pImage = &pixels[0])
                     {
-                        var icon = _converter(bm.bmWidth, bm.bmHeight, bm.bmWidth * 4, (IntPtr)pImage);
+                        var icon = _converter(width, height, width * 4, (IntPtr)pImage);
                         _cache[iconIndex] = icon;
                         return icon;
                     }
@@ -75,6 +77,8 @@ public class ShellImageList
         finally
         {
             User32.ReleaseDC(HWND.Null, hdc);
+            Gdi32.DeleteObject(iconInfo.hbmColor);
+            Gdi32.DeleteObject(iconInfo.hbmMask);
         }
     }
 
