@@ -1,2 +1,2 @@
 # RadianTools.Interop.Windows
-Interop library for accessing Windows native APIs.
+C# Interop library for accessing Windows native APIs.
