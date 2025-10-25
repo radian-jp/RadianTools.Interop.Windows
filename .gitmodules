@@ -1,0 +1,3 @@
+[submodule "src/UnmanagedStructGenerator"]
+	path = src/UnmanagedStructGenerator
+	url = https://github.com/radian-jp/UnmanagedStructGenerator.git
