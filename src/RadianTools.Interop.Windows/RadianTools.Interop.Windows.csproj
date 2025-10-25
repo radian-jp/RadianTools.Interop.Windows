@@ -7,6 +7,20 @@
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <PathMap>$(MSBuildProjectDirectory)=.</PathMap>
+    <Version>0.0.1</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Company>RadianTools</Company>
+    <PackageTags>C#;RadianTools;Windows;Unmanaged;Interop</PackageTags>
+    <Authors>radian</Authors>
+    <Title>$(AssemblyName)</Title>
+    <Description>C# Interop library for accessing Windows native APIs.</Description>
+    <Copyright>Copyright (c) 2025 radian</Copyright>
+    <PackageProjectUrl>https://github.com/radian-jp/RadianTools.Generators.UnmanagedStructGenerator</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/radian-jp/RadianTools.Generators.UnmanagedStructGenerator</RepositoryUrl>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\UnmanagedStructGenerator\src\RadianTools.Generators.UnmanagedStructGenerator\UnmanagedStructGenerator.csproj">
       <OutputItemType>Analyzer</OutputItemType>
