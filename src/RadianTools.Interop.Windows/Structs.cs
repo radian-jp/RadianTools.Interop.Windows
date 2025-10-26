@@ -40,6 +40,37 @@ public struct COLORREF
 }
 
 [StructLayout(LayoutKind.Sequential)]
+public struct DEVPROPKEY
+{
+    public Guid fmtid;
+    public uint pid;
+}
+
+/// <summary>
+/// 定義済みデバイスプロパティキー
+/// </summary>
+public static class DEVPKEY
+{
+    public static readonly DEVPROPKEY Device_InstanceId = new DEVPROPKEY
+    {
+        fmtid = new Guid("78A7C492-0E3B-4EFB-B00B-DCB9D3C5E9B0"),
+        pid = 256
+    };
+
+    public static readonly DEVPROPKEY NAME = new DEVPROPKEY
+    {
+        fmtid = new Guid("B725F130-47EF-101A-A5F1-02608C9EEBAC"),
+        pid = 10
+    };
+
+    public static readonly DEVPROPKEY Device_Manufacturer = new DEVPROPKEY
+    {
+        fmtid = new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"),
+        pid = 13
+    };
+}
+
+[StructLayout(LayoutKind.Sequential)]
 public struct RECT
 {
     public int left;
@@ -104,6 +135,24 @@ public struct SHITEMID
 public struct ITEMIDLIST
 {
     public SHITEMID mkid;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct SP_DEVICE_INTERFACE_DATA
+{
+    public uint cbSize;
+    public Guid InterfaceClassGuid;
+    public uint Flags;
+    public IntPtr Reserved;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct SP_DEVINFO_DATA
+{
+    public uint cbSize;
+    public Guid ClassGuid;
+    public uint DevInst;
+    public IntPtr Reserved;
 }
 
 [StructLayout(LayoutKind.Explicit, CharSet = CharSet.Unicode)]
@@ -174,6 +223,135 @@ public struct BITMAPINFOHEADER
     public uint biClrImportant;
 }
 
+
+[StructLayout(LayoutKind.Sequential)]
+public struct RAWINPUTHEADER
+{
+    public RIM_TYPE Type;
+    public int Size;
+    public nint DeviceHandle;
+    public nint WParam;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 2)]
+public record struct RAWMOUSE
+{
+    public short Flags;
+    private short _padding;
+    public short ButtonFlags;
+    public short ButtonData;
+    public int RawButtons;
+    public int LastX;
+    public int LastY;
+    public int ExtraInformation;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 2)]
+public record struct RAWKEYBOARD
+{
+    public short MakeCode;
+    public short Flags;
+    public short Reserved;
+    public VKey VKey;
+    public WindowMessage Message;
+    public int ExtraInformation;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 2)]
+public struct RAWINPUT
+{
+    [StructLayout(LayoutKind.Explicit)]
+    public struct DEVICEDATA
+    {
+        [FieldOffset(0)]
+        public RAWMOUSE mouse;
+        [FieldOffset(0)]
+        public RAWKEYBOARD keyboard;
+    }
+
+    public RAWINPUTHEADER header;
+    public DEVICEDATA data;
+}
+
+public struct RAWINPUTDEVICE
+{
+    public short UsagePage;
+    public short Usage;
+    public RIDEV Flags;
+    public HWND HWndTarget;
+
+    public RAWINPUTDEVICE(int deviceType, HWND hWndTarget)
+    {
+        switch ((RIM_TYPE)deviceType)
+        {
+            case RIM_TYPE.Mouse:
+                UsagePage = 1;
+                Usage = 2;
+                break;
+
+            case RIM_TYPE.Keyboard:
+                UsagePage = 1;
+                Usage = 6;
+                break;
+
+            default:
+                throw new ArgumentException($"deviceType {deviceType:D} is not supported.");
+        }
+        Flags = RIDEV.INPUTSINK | RIDEV.NOLEGACY;
+        HWndTarget = hWndTarget;
+    }
+}
+
+
+[StructLayout(LayoutKind.Sequential)]
+public struct CREATESTRUCT
+{
+    public IntPtr lpCreateParams;
+    public IntPtr hInstance;
+    public IntPtr hMenu;
+    public IntPtr hwndParent;
+    public int cy;
+    public int cx;
+    public int y;
+    public int x;
+    public int style;
+    public IntPtr lpszName;
+    public IntPtr lpszClass;
+    public int dwExStyle;
+}
+
+public delegate IntPtr DelegateWndProc(HWND hwnd, WindowMessage msg, IntPtr wParam, IntPtr lParam);
+
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public struct WNDCLASSEX
+{
+    public uint cbSize;
+    public uint style;
+    public DelegateWndProc lpfnWndProc;
+    public int cbClsExtra;
+    public int cbWndExtra;
+    public IntPtr hInstance;
+    public IntPtr hIcon;
+    public IntPtr hCursor;
+    public IntPtr hbrBackground;
+    public IntPtr lpszMenuName;
+    [MarshalAs(UnmanagedType.LPWStr)]
+    public string lpszClassName;
+    public IntPtr hIconSm;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct MSG
+{
+    public IntPtr hwnd;
+    public uint message;
+    public IntPtr wParam;
+    public IntPtr lParam;
+    public uint time;
+    public int pt_x;
+    public int pt_y;
+}
+
 #region UnmanagedStructGenerator
 
 [FixedChars(FileSystem.MAX_PATH)]
@@ -183,6 +361,11 @@ public partial struct CHARS_MAX_PATH
 
 [FixedChars(80)]
 public partial struct CHARS_80
+{
+}
+
+[NativeHandle]
+public partial struct DEVINST
 {
 }
 
@@ -199,6 +382,7 @@ public partial struct HWND
 [NativeHandle]
 public partial struct HANDLE
 {
+    public bool IsInvalid => _value == -1;
 }
 
 [NativeHandle]
@@ -220,6 +404,11 @@ public partial struct HICON : IDisposable
         if (value != IntPtr.Zero)
             User32.DestroyIcon(value);
     }
+}
+
+[NativeHandle]
+public partial struct HRAWINPUT
+{
 }
 
 [NativeHandle(typeof(ITEMIDLIST*))]
