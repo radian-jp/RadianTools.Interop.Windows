@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -22,6 +23,9 @@ public class HiddenWindow : IDisposable
 
     public HWND Handle => _hwnd;
     public Exception? LastException { get; private set; }
+
+    private readonly ConcurrentQueue<(Action action, TaskCompletionSource<object?> tcs)> _invokeQueue = new();
+    private readonly uint _msgInvokeAsync = User32.RegisterWindowMessage("HiddenWindow.InvokeAsync");
 
     public void Run()
     {
@@ -106,6 +110,14 @@ public class HiddenWindow : IDisposable
         eventInitialized.Wait();
     }
 
+    public Task InvokeAsync(Action action)
+    {
+        var tcs = new TaskCompletionSource<object?>();
+        _invokeQueue.Enqueue((action, tcs));
+        User32.PostMessage(Handle, _msgInvokeAsync, IntPtr.Zero, IntPtr.Zero);
+        return tcs.Task;
+    }
+
     private static void RegisterWindowClass()
     {
         if (_atomWindow.HasValue)
@@ -155,6 +167,23 @@ public class HiddenWindow : IDisposable
 
     protected virtual IntPtr WndProc(HWND hwnd, WindowMessage msg, IntPtr wParam, IntPtr lParam)
     {
+        if ((uint)msg == _msgInvokeAsync)
+        {
+            while (_invokeQueue.TryDequeue(out var item))
+            {
+                try
+                {
+                    item.action();
+                    item.tcs.SetResult(null);
+                }
+                catch (Exception ex)
+                {
+                    item.tcs.SetException(ex);
+                }
+            }
+            return User32.DefWindowProc(hwnd, msg, wParam, lParam);
+        }
+
         switch (msg)
         {
             case WindowMessage.WM_DESTROY:
