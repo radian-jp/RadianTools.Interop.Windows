@@ -76,6 +76,9 @@ public static class User32
     public static extern bool UnregisterClass(string lpClassName, IntPtr hInstance);
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern uint RegisterWindowMessage(string messageName);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern HWND CreateWindowEx(
         int dwExStyle,
         string lpClassName,
@@ -98,6 +101,9 @@ public static class User32
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr DispatchMessage([In] ref MSG lpMsg);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int PostMessage(HWND hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int PostThreadMessage(uint idThread, uint msg, IntPtr wParam, IntPtr lParam);
