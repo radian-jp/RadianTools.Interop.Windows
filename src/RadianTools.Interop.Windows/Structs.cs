@@ -280,25 +280,34 @@ public struct RAWINPUTDEVICE
     public RIDEV Flags;
     public HWND HWndTarget;
 
-    public RAWINPUTDEVICE(int deviceType, HWND hWndTarget)
+    public RAWINPUTDEVICE(RIM_TYPE deviceType, HWND hWndTarget, bool remove)
     {
-        switch ((RIM_TYPE)deviceType)
+        switch (deviceType)
         {
-            case RIM_TYPE.Mouse:
+            case RIM_TYPE.RIM_TYPEMOUSE:
                 UsagePage = 1;
                 Usage = 2;
                 break;
 
-            case RIM_TYPE.Keyboard:
+            case RIM_TYPE.RIM_TYPEKEYBOARD:
                 UsagePage = 1;
                 Usage = 6;
                 break;
 
             default:
-                throw new ArgumentException($"deviceType {deviceType:D} is not supported.");
+                throw new ArgumentException($"RIM_TYPE {deviceType:D} is not supported.");
         }
-        Flags = RIDEV.INPUTSINK | RIDEV.NOLEGACY;
-        HWndTarget = hWndTarget;
+
+        if (remove)
+        {
+            Flags = RIDEV.RIDEV_REMOVE;
+            HWndTarget = HWND.Null;
+        }
+        else
+        {
+            Flags = RIDEV.RIDEV_INPUTSINK | RIDEV.RIDEV_NOLEGACY;
+            HWndTarget = hWndTarget;
+        }
     }
 }
 

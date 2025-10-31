@@ -458,14 +458,19 @@ public enum SHGFI_FLAGS : uint
 public enum RIDEV : int
 {
     /// <summary>
+    /// 受信を停止する
+    /// </summary>
+    RIDEV_REMOVE = 0x00000001,
+
+    /// <summary>
     /// レガシメッセージを生成しない
     /// </summary>
-    NOLEGACY = 0x00000030,
+    RIDEV_NOLEGACY = 0x00000030,
 
     /// <summary>
     /// 非フォアグラウンドでも入力を受け取る
     /// </summary>
-    INPUTSINK = 0x00000100,
+    RIDEV_INPUTSINK = 0x00000100,
 }
 
 public enum RIDI : int
@@ -477,8 +482,9 @@ public enum RIDI : int
 
 public enum RIM_TYPE : int
 {
-    Mouse = 0,
-    Keyboard
+    RIM_TYPEMOUSE = 0,
+    RIM_TYPEKEYBOARD = 1,
+    RIM_TYPEHID = 2,
 }
 
 /// <summary>
