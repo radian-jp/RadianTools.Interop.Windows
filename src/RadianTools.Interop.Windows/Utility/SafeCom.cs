@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace RadianTools.Interop.Windows;
+namespace RadianTools.Interop.Windows.Utility;
 
 public class SafeCom
 {

@@ -1,10 +1,11 @@
-﻿using System.Runtime.InteropServices;
+﻿using RadianTools.Interop.Windows.Utility;
+using System.Runtime.InteropServices;
 
 namespace RadianTools.Interop.Windows;
 
 public class SafePIDL : IDisposable, IEquatable<SafePIDL>
 {
-    private nint _Value;
+    private IntPtr _Value;
     private bool _mustNotFree;
     private Guid? _KnownFolderId;
     private int? _cachedHashCode;
@@ -85,8 +86,8 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
         if (_mustNotFree)
             return;
 
-        var p = Interlocked.Exchange(ref _Value, nint.Zero);
-        if (p != nint.Zero)
+        var p = Interlocked.Exchange(ref _Value, IntPtr.Zero);
+        if (p != IntPtr.Zero)
             Marshal.FreeCoTaskMem(p);
     }
 
@@ -104,10 +105,10 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
     public static implicit operator PIDL(SafePIDL p)
         => p.Value;
 
-    public static SafePIDL Null { get; } = new SafePIDL(nint.Zero, false);
+    public static SafePIDL Null { get; } = new SafePIDL(IntPtr.Zero, false);
 
     public bool IsNull
-        => _Value == nint.Zero;
+        => _Value == IntPtr.Zero;
 
     public SHFILEINFOW? GetFileInfo(SFGAO_FLAGS attrFlags, SHGFI_FLAGS getFlags)
     {
@@ -225,7 +226,7 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
             }
 
             pidl = Combine(parent, childPidl);
-            Marshal.FreeCoTaskMem((nint)childPidl);
+            Marshal.FreeCoTaskMem((IntPtr)childPidl);
             return true;
         }
     }

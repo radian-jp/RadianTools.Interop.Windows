@@ -1,10 +1,85 @@
 ﻿using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace RadianTools.Interop.Windows;
 
-public record HidDeviceDetail(string FriendlyName, string Manufacturer, string ProductName)
+/// <summary>
+/// デバイス詳細情報
+/// </summary>
+public record HidDeviceDetail(
+    /// <summary>デバイスパス</summary>
+    HidDevicePath DevicePath,
+    /// <summary>フレンドリー名</summary>
+    string FriendlyName = "",
+    /// <summary>製造元</summary>
+    string Manufacturer = "",
+    /// <summary>プロダクト名</summary>
+    string ProductName = "")
 {
-    public static HidDeviceDetail Empty { get; } = new HidDeviceDetail("", "", "");
+    /// <summary>空のインスタンス</summary>
+    public static HidDeviceDetail Empty { get; } = new HidDeviceDetail(HidDevicePath.Empty);
+}
+
+/// <summary>
+/// HID デバイスパス情報
+/// </summary>
+public record HidDevicePath(
+    /// <summary>デバイスパス</summary>
+    string Value,
+
+    /// <summary>デバイスインターフェースクラス GUID</summary>
+    Guid? InterfaceClassGuid = null,
+
+    /// <summary>ベンダーID（VID_XXXX）</summary>
+    string VendorId = "",
+
+    /// <summary>プロダクトID（PID_XXXX）</summary>
+    string ProductId = "",
+
+    /// <summary>インターフェース番号（MI_XX）</summary>
+    string InterfaceNo = "",
+
+    /// <summary>コレクション番号（ColXX）</summary>
+    string CollectionNo = "",
+
+    /// <summary>PnP識別子のサフィックス部分</summary>
+    string PnpSuffix = ""
+)
+{
+    /// <summary>空のインスタンス</summary>
+    public static HidDevicePath Empty { get; } = new HidDevicePath("");
+
+    private static readonly Regex _regexVendorId = new(@"VID_([0-9A-F]{4})", RegexOptions.IgnoreCase);
+    private static readonly Regex _regexProductId = new(@"PID_([0-9A-F]{4})", RegexOptions.IgnoreCase);
+    private static readonly Regex _regexInterfaceNo = new(@"MI_([0-9]{2})", RegexOptions.IgnoreCase);
+    private static readonly Regex _regexCollectionNo = new(@"Col([0-9]{2})", RegexOptions.IgnoreCase);
+    private static readonly Regex _regexInterfaceClassGuid = new(@"\{([0-9A-F\-]{36})\}", RegexOptions.IgnoreCase);
+    private static readonly Regex _regexPnpSuffix = new(@"#([^#]+)#\{", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// HID デバイスパス文字列から情報を抽出してインスタンスを生成します。
+    /// </summary>
+    /// <param name="devicePath">HID デバイスパス</param>
+    /// <returns>抽出された情報を含む <see cref="HidDevicePath"/> インスタンス</returns>
+    public static HidDevicePath FromPathString(string devicePath)
+    {
+        static string MatchGroup(string input, Regex regex)
+        {
+            var match = regex.Match(input);
+            return match.Success ? match.Groups[1].Value : "";
+        }
+
+        string vid = MatchGroup(devicePath, _regexVendorId);
+        string pid = MatchGroup(devicePath, _regexProductId);
+        string mi = MatchGroup(devicePath, _regexInterfaceNo);
+        string col = MatchGroup(devicePath, _regexCollectionNo);
+        string pnp = MatchGroup(devicePath, _regexPnpSuffix);
+
+        var guidMatch = _regexInterfaceClassGuid.Match(devicePath);
+        Guid? guid = guidMatch.Success ? Guid.Parse(guidMatch.Groups[1].Value) : null;
+
+        return new HidDevicePath(devicePath, guid, vid, pid, mi, col, pnp);
+    }
 }
 
 public static class HidHelper
@@ -15,18 +90,23 @@ public static class HidHelper
         if (string.IsNullOrEmpty(devicePath))
             return HidDeviceDetail.Empty;
 
+        var hidDevicePath = HidDevicePath.FromPathString(devicePath);
+        var manufacturer = "";
         var productName = "";
         var fh = Kernel32.CreateFile(devicePath, 0, FILE_SHARE.FILE_SHARE_READ, IntPtr.Zero, FILE_DISPOSITION.OPEN_EXISTING, 0, IntPtr.Zero);
         if (!fh.IsInvalid)
         {
             try
             {
+                const int MAX_BUF_SIZE = 4092;
                 unsafe
                 {
-                    const int MAX_PRODUCT_NAME = 4092;
-                    var pProductName = stackalloc char[MAX_PRODUCT_NAME / sizeof(char)];
-                    if (Hid.HidD_GetProductString(fh, (IntPtr)pProductName, MAX_PRODUCT_NAME) != 0)
-                        productName = new string(pProductName);
+                    var pName = stackalloc char[MAX_BUF_SIZE / sizeof(char)];
+                    if (Hid.HidD_GetProductString(fh, (IntPtr)pName, MAX_BUF_SIZE))
+                        productName = new string(pName);
+
+                    if (Hid.HidD_GetManufacturerString(fh, (IntPtr)pName, MAX_BUF_SIZE))
+                        manufacturer = new string(pName);
                 }
             }
             finally
@@ -36,11 +116,9 @@ public static class HidHelper
         }
 
         var friendlyName = "";
-        var manufacturer = "";
-        var deviceGuid = GetDeviceGuid(devicePath);
-        if (deviceGuid.HasValue)
+        if (hidDevicePath.InterfaceClassGuid.HasValue)
         {
-            var deviceGuidVal = deviceGuid.Value;
+            var deviceGuidVal = hidDevicePath.InterfaceClassGuid.Value;
             var deviceInstanceId = GetDeviceInstanceId(ref deviceGuidVal);
             if (!string.IsNullOrEmpty(deviceInstanceId))
             {
@@ -49,12 +127,14 @@ public static class HidHelper
                 if (cr == CONFIGRET.CR_SUCCESS)
                 {
                     friendlyName = GetDevNodeProperty(devInst, in DEVPKEY.NAME);
-                    manufacturer = GetDevNodeProperty(devInst, in DEVPKEY.Device_Manufacturer);
+
+                    if( string.IsNullOrEmpty(manufacturer) )
+                        manufacturer = GetDevNodeProperty(devInst, in DEVPKEY.Device_Manufacturer);
                 }
             }
         }
 
-        return new HidDeviceDetail(friendlyName, manufacturer, productName);
+        return new HidDeviceDetail(hidDevicePath, friendlyName, manufacturer, productName);
     }
 
     private static string GetDevicePath(IntPtr hDevice)
@@ -73,23 +153,6 @@ public static class HidHelper
             var devicePath = new string(pDevPath).TrimEnd('\0');
             return devicePath;
         }
-    }
-
-    public static Guid? GetDeviceGuid(string devicePath)
-    {
-        int guidStart = devicePath.IndexOf('{');
-        if (guidStart < 0)
-            return null;
-
-        int guidEnd = devicePath.IndexOf('}', guidStart);
-        if (guidEnd < 0) 
-            return null;
-
-        string strGuid = devicePath.Substring(guidStart, guidEnd - guidStart + 1);
-        if (!Guid.TryParse(strGuid, out var guid))
-            return null;
-
-        return guid;
     }
 
     private static string GetDeviceInstanceId(ref Guid hidGuid)
@@ -125,21 +188,6 @@ public static class HidHelper
         {
             SetupApi.SetupDiDestroyDeviceInfoList(deviceInfoSet);
         }
-    }
-
-    private static string GetDeviceInterfaceProperty(string deviceInterfaceName, in DEVPROPKEY devPropKey)
-    {
-        var cr = Cfgmgr32.CM_Get_Device_Interface_Property(deviceInterfaceName, in devPropKey, out var propertyType, IntPtr.Zero, out var propertySize, 0);
-        if (cr != CONFIGRET.CR_BUFFER_SMALL)
-            return "";
-
-        Span<char> bufProp = stackalloc char[(int)propertySize / sizeof(char)];
-        cr = Cfgmgr32.CM_Get_Device_Interface_Property(deviceInterfaceName, in devPropKey, out propertyType, ref bufProp[0], out propertySize, 0);
-        if (cr != CONFIGRET.CR_SUCCESS)
-            return "";
-
-        string prop = new string(bufProp).TrimEnd('\0');
-        return prop;
     }
 
     private static string GetDevNodeProperty(DEVINST devInst, in DEVPROPKEY devPropKey)

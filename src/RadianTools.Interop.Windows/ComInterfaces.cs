@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using RadianTools.Interop.Windows.Utility;
 
 namespace RadianTools.Interop.Windows;
 
@@ -111,8 +112,8 @@ public interface IImageList
     [PreserveSig] HRESULT GetIcon(int i, uint flags, out HICON picon);
     [PreserveSig] HRESULT GetImageInfo(int i, out IMAGEINFO pImageInfo);
     [PreserveSig] HRESULT Copy(int iDst, [MarshalAs(UnmanagedType.IUnknown)] object punkSrc, int iSrc, uint uFlags);
-    [PreserveSig] HRESULT Merge(int i1, [MarshalAs(UnmanagedType.IUnknown)] object punk2, int i2, int dx, int dy, ref Guid riid, out nint ppv);
-    [PreserveSig] HRESULT Clone(ref Guid riid, out nint ppv);
+    [PreserveSig] HRESULT Merge(int i1, [MarshalAs(UnmanagedType.IUnknown)] object punk2, int i2, int dx, int dy, ref Guid riid, out IntPtr ppv);
+    [PreserveSig] HRESULT Clone(ref Guid riid, out IntPtr ppv);
     [PreserveSig] HRESULT GetImageRect(int i, out RECT prc);
     [PreserveSig] HRESULT GetIconSize(out int cx, out int cy);
     [PreserveSig] HRESULT SetIconSize(int cx, int cy);
@@ -127,7 +128,7 @@ public interface IImageList
     [PreserveSig] HRESULT DragMove(int x, int y);
     [PreserveSig] HRESULT SetDragCursorImage([MarshalAs(UnmanagedType.IUnknown)] object punk, int iDrag, int dxHotspot, int dyHotspot);
     [PreserveSig] HRESULT DragShowNolock(BOOL fShow);
-    [PreserveSig] HRESULT GetDragImage(out POINT ppt, out POINT pptHotspot, ref Guid riid, out nint ppv);
+    [PreserveSig] HRESULT GetDragImage(out POINT ppt, out POINT pptHotspot, ref Guid riid, out IntPtr ppv);
     [PreserveSig] HRESULT GetItemFlags(int i, out uint dwFlags);
     [PreserveSig] HRESULT GetOverlayImage(int iOverlay, out int piIndex);
 }

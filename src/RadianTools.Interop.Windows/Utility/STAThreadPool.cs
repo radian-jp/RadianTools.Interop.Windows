@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace RadianTools.Interop.Windows;
+namespace RadianTools.Interop.Windows.Utility;
 
 public class STAThreadPool : IDisposable
 {

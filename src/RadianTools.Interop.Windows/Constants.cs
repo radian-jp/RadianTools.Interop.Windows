@@ -765,7 +765,7 @@ public class KnownFolderPIDL
     public static readonly Lazy<SafePIDL> Desktop = new(() => GetKnownFolderPIDL(FOLDERID.Desktop));
     public static readonly Lazy<SafePIDL> NetworkFolder = new(() => GetKnownFolderPIDL(FOLDERID.NetworkFolder));
     public static readonly Lazy<SafePIDL> UsersLibraries = new(() => GetKnownFolderPIDL(FOLDERID.UsersLibraries));
-    public static readonly Lazy<SafePIDL> UsersFiles = new(GetKnownFolderPIDL(FOLDERID.UsersFiles));
+    public static readonly Lazy<SafePIDL> UsersFiles = new(() => GetKnownFolderPIDL(FOLDERID.UsersFiles));
 
     public static SafePIDL GetKnownFolderPIDL(in Guid rfid)
     {

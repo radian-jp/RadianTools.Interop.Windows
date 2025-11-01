@@ -2,16 +2,16 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
-namespace RadianTools.Interop.Windows;
+namespace RadianTools.Interop.Windows.Utility;
 
 public class ShellImageList
 {
-    public delegate object Converter(int width, int height, int stride, nint src);
+    public delegate object Converter(int width, int height, int stride, IntPtr src);
 
     private readonly Dictionary<int, object> _cache = new();
 
     private IImageList ImageList { get; }
-    public nint Pointer { get; }
+    public IntPtr Pointer { get; }
 
     private Converter _converter;
 

@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace RadianTools.Interop.Windows;
+namespace RadianTools.Interop.Windows.Utility;
 
 /// <summary>
 /// 不可視ウィンドウクラス(専用スレッド動作)
@@ -205,13 +205,19 @@ public class HiddenWindow : IDisposable
                 {
                     var userData = User32.GetWindowLongPtr(hwnd, GWLP.GWLP_USERDATA);
                     if (userData == IntPtr.Zero)
-                        return User32.DefWindowProc(hwnd, msg, wParam, lParam);
+                        break;
 
                     var gcHandle = GCHandle.FromIntPtr(userData);
                     var instance = (HiddenWindow)gcHandle.Target!;
-                    return instance.WndProc(hwnd, msg, wParam, lParam);
+                    if( instance!=null )
+                    {
+                        return instance.WndProc(hwnd, msg, wParam, lParam);
+                    }
                 }
+                break;
         }
+
+        return User32.DefWindowProc(hwnd, msg, wParam, lParam);
     }
 
     /// <summary>

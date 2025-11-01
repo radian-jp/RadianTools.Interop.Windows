@@ -229,8 +229,8 @@ public struct RAWINPUTHEADER
 {
     public RIM_TYPE Type;
     public int Size;
-    public nint DeviceHandle;
-    public nint WParam;
+    public IntPtr DeviceHandle;
+    public IntPtr WParam;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 2)]
