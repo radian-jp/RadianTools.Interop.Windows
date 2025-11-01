@@ -12,118 +12,158 @@ namespace RadianTools.Interop.Windows;
 public class HiddenWindow : IDisposable
 {
     private Thread? _thread;
-    private HWND _hwnd;
-    private uint _threadId;
     private const int DisposeWaitMsec = 5000;
 
     private static Lazy<string> _windowClassName = new Lazy<string>(() => "HiddenWindowClass_" + Guid.NewGuid().ToString("N"));
     private static ushort? _atomWindow;
     private static IntPtr _hInstance = Kernel32.GetModuleHandle(IntPtr.Zero);
-    private static DelegateWndProc _wndProcDelegate = StaticWndProc;
+    private static DelegateWndProc _wndProcDelegate = WndProcGateway;
 
+    /// <summary>
+    /// Dispose済みかどうか
+    /// </summary>
+    public bool IsDisposed => !_gcHandle.IsAllocated;
+    private GCHandle _gcHandle;
+
+    /// <summary>
+    /// ウィンドウハンドル
+    /// </summary>
     public HWND Handle => _hwnd;
+    private HWND _hwnd;
+
+    /// <summary>
+    /// ウィンドウスレッドで最後に発生した例外
+    /// </summary>
     public Exception? LastException { get; private set; }
 
     private readonly ConcurrentQueue<(Action action, TaskCompletionSource<object?> tcs)> _invokeQueue = new();
     private readonly uint _msgInvokeAsync = User32.RegisterWindowMessage("HiddenWindow.InvokeAsync");
 
-    public void Run()
+    private object _lockObj = new object();
+
+    /// <summary>
+    /// コンストラクタ
+    /// </summary>
+    public HiddenWindow()
     {
-        var gch = GCHandle.Alloc(this);
-        using var eventInitialized = new CountdownEvent(1);
-
-        _thread = new Thread(() => {
-            try
-            {
-                try
-                {
-                    _threadId = Kernel32.GetCurrentThreadId();
-
-                    // ウィンドウクラスは一度だけ登録し、
-                    // アプリケーションの終了と同時に OS により自動解放される。
-                    // UnregisterClass は不要かつリスクがあるため、呼び出していない。
-                    RegisterWindowClass();
-
-                    // ウィンドウ作成（不可視）
-                    _hwnd = User32.CreateWindowEx(
-                        0,
-                        _windowClassName.Value,
-                        string.Empty,
-                        0,
-                        0, 0, 0, 0,
-                        IntPtr.Zero,
-                        IntPtr.Zero,
-                        _hInstance,
-                        GCHandle.ToIntPtr(gch));
-
-                    if (_hwnd.Value == IntPtr.Zero)
-                        throw new Win32Exception(Marshal.GetLastWin32Error());
-                }
-                finally
-                {
-                    //ウィンドウ作成完了(または失敗)
-                    eventInitialized.Signal();
-                }
-
-                // メッセージループ
-                MSG msg;
-                while (true)
-                {
-                    int ret = User32.GetMessage(out msg, IntPtr.Zero, 0, 0);
-                    if (ret > 0)
-                    {
-                        // 通常メッセージ
-                        User32.TranslateMessage(ref msg);
-                        User32.DispatchMessage(ref msg);
-                    }
-                    else if (ret == 0)
-                    {
-                        // WM_QUIT → 正常終了
-                        break;
-                    }
-                    else // ret == -1
-                    {
-                        // エラー発生
-                        int err = Marshal.GetLastWin32Error();
-                        Debug.WriteLine($"GetMessage failed. Error={err}");
-                        break;
-                    }
-                }
-
-                // 終了処理
-                User32.DestroyWindow(_hwnd);
-            }
-            catch (Exception ex)
-            {
-                LastException = ex;
-            }
-            finally
-            {
-                gch.Free();
-            }
-        });
-        _thread.IsBackground = true;
-        _thread.SetApartmentState(ApartmentState.STA);
-        _thread.Start();
-
-        // HWND ができるまで待つ
-        eventInitialized.Wait();
+        _gcHandle = GCHandle.Alloc(this);
     }
 
+    /// <summary>
+    /// ウィンドウを起動する。
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">インスタンスが解放済み</exception>
+    public void Run()
+    {
+        lock (_lockObj)
+        {
+            if (IsDisposed)
+                throw new ObjectDisposedException(nameof(HiddenWindow));
+
+            if (_thread != null)
+                return;
+
+            using var eventInitialized = new CountdownEvent(1);
+
+            _thread = new Thread(() => {
+                try
+                {
+                    try
+                    {
+                        // ウィンドウクラスは一度だけ登録し、
+                        // アプリケーションの終了と同時に OS により自動解放される。
+                        // UnregisterClass は不要かつリスクがあるため、呼び出していない。
+                        RegisterWindowClass();
+
+                        // ウィンドウ作成（不可視）
+                        _hwnd = User32.CreateWindowEx(
+                            0,
+                            _windowClassName.Value,
+                            string.Empty,
+                            0,
+                            0, 0, 0, 0,
+                            IntPtr.Zero,
+                            IntPtr.Zero,
+                            _hInstance,
+                            GCHandle.ToIntPtr(_gcHandle));
+
+                        if (_hwnd.Value == IntPtr.Zero)
+                            throw new Win32Exception(Marshal.GetLastWin32Error());
+                    }
+                    finally
+                    {
+                        //ウィンドウ作成完了(または失敗)
+                        eventInitialized.Signal();
+                    }
+
+                    // メッセージループ
+                    MSG msg;
+                    while (true)
+                    {
+                        int ret = User32.GetMessage(out msg, IntPtr.Zero, 0, 0);
+                        if (ret > 0)
+                        {
+                            // 通常メッセージ
+                            User32.TranslateMessage(ref msg);
+                            User32.DispatchMessage(ref msg);
+                        }
+                        else if (ret == 0)
+                        {
+                            // WM_QUIT → 正常終了
+                            break;
+                        }
+                        else // ret == -1
+                        {
+                            // エラー発生
+                            int err = Marshal.GetLastWin32Error();
+                            Debug.WriteLine($"GetMessage failed. Error={err}");
+                            break;
+                        }
+                    }
+
+                    // 終了処理
+                    User32.DestroyWindow(_hwnd);
+                }
+                catch (Exception ex)
+                {
+                    LastException = ex;
+                }
+            });
+            _thread.IsBackground = true;
+            _thread.SetApartmentState(ApartmentState.STA);
+            _thread.Start();
+
+            // HWND ができるまで待つ
+            eventInitialized.Wait();
+        }
+    }
+
+    /// <summary>
+    /// ウィンドウプロシージャを処理しているスレッドでActionを実行します。
+    /// </summary>
+    /// <param name="action">実行するAction</param>
+    /// <returns></returns>
+    /// <exception cref="ObjectDisposedException">Actionを実行しているTask</exception>
     public Task InvokeAsync(Action action)
     {
+        if (IsDisposed)
+            throw new ObjectDisposedException(nameof(HiddenWindow));
+
         var tcs = new TaskCompletionSource<object?>();
         _invokeQueue.Enqueue((action, tcs));
         User32.PostMessage(Handle, _msgInvokeAsync, IntPtr.Zero, IntPtr.Zero);
         return tcs.Task;
     }
 
+    /// <summary>
+    /// ウィンドウクラス登録
+    /// </summary>
+    /// <exception cref="Win32Exception">WinAPI失敗時に発生</exception>
     private static void RegisterWindowClass()
     {
         if (_atomWindow.HasValue)
             return;
 
-        // ウィンドウクラス登録
         WNDCLASSEX wc = new WNDCLASSEX();
         wc.cbSize = (uint)Marshal.SizeOf(typeof(WNDCLASSEX));
         wc.lpfnWndProc = _wndProcDelegate;
@@ -138,7 +178,16 @@ public class HiddenWindow : IDisposable
         _atomWindow = atom;
     }
 
-    private static IntPtr StaticWndProc(HWND hwnd, WindowMessage msg, IntPtr wParam, IntPtr lParam)
+    /// <summary>
+    /// 内部静的ウィンドウプロシージャからインスタンスのウィンドウプロシージャへ
+    /// ウィンドウメッセージの中継を行う。
+    /// </summary>
+    /// <param name="hwnd">ウィンドウハンドル</param>
+    /// <param name="msg">ウィンドウメッセージ</param>
+    /// <param name="wParam">メッセージ追加情報1</param>
+    /// <param name="lParam">メッセージ追加情報2</param>
+    /// <returns>メッセージ処理の結果</returns>
+    private static IntPtr WndProcGateway(HWND hwnd, WindowMessage msg, IntPtr wParam, IntPtr lParam)
     {
         switch (msg)
         {
@@ -165,6 +214,14 @@ public class HiddenWindow : IDisposable
         }
     }
 
+    /// <summary>
+    /// 継承可能なウィンドウプロシージャ。
+    /// </summary>
+    /// <param name="hwnd">ウィンドウハンドル</param>
+    /// <param name="msg">ウィンドウメッセージ</param>
+    /// <param name="wParam">メッセージ追加情報1</param>
+    /// <param name="lParam">メッセージ追加情報2</param>
+    /// <returns>メッセージ処理の結果</returns>
     protected virtual IntPtr WndProc(HWND hwnd, WindowMessage msg, IntPtr wParam, IntPtr lParam)
     {
         if ((uint)msg == _msgInvokeAsync)
@@ -194,16 +251,25 @@ public class HiddenWindow : IDisposable
         return User32.DefWindowProc(hwnd, msg, wParam, lParam);
     }
 
+    /// <summary>
+    /// 解放処理
+    /// </summary>
     public void Dispose()
     {
-        var thread = Interlocked.Exchange(ref _thread, null);
-        if (thread != null && thread.IsAlive)
+        lock (_lockObj)
         {
-            User32.PostThreadMessage(_threadId, (uint)WindowMessage.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
-            if (!thread.Join(DisposeWaitMsec))
+            if (_gcHandle.IsAllocated)
+                _gcHandle.Free();
+
+            if (_thread != null && _thread.IsAlive)
             {
-                Debug.WriteLine($"After Dispose, the thread did not stop within {DisposeWaitMsec} msec.");
+                User32.PostMessage(_hwnd, (uint)WindowMessage.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
+                if (!_thread.Join(DisposeWaitMsec))
+                {
+                    Debug.WriteLine($"After Dispose, the thread did not stop within {DisposeWaitMsec} msec.");
+                }
             }
+            _thread = null;
         }
     }
 }
