@@ -770,6 +770,6 @@ public class KnownFolderPIDL
     public static SafePIDL GetKnownFolderPIDL(in Guid rfid)
     {
         var hr = Shell32.SHGetKnownFolderIDList(in rfid, 0, HANDLE.Null, out var pidl);
-        return hr.IsOK ? new SafePIDL(pidl, false) : SafePIDL.Null;
+        return hr.IsOK ? SafePIDL.FromStatic(pidl) : SafePIDL.Null;
     }
 }

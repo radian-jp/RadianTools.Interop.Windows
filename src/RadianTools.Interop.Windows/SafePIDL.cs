@@ -46,7 +46,7 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
     public bool IsKnownFolder
         => KnownFolderId != Guid.Empty;
 
-    public SafePIDL(PIDL pidl, bool mustNotFree)
+    private SafePIDL(PIDL pidl, bool mustNotFree)
     {
         _Value = pidl;
         _mustNotFree = mustNotFree;
@@ -79,15 +79,17 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
         HasSubFolder = (fileInfo.Value.dwAttributes & (uint)SFGAO_FLAGS.SFGAO_HASSUBFOLDER) != 0;
     }
 
-    public SafePIDL(IntPtr pidl) : this(pidl, true) { }
+    public static SafePIDL Create(PIDL pidl)
+        => new SafePIDL(pidl, mustNotFree: false);
+
+    public static SafePIDL FromStatic(PIDL pidl)
+        => new SafePIDL(pidl, mustNotFree: true);
 
     protected virtual void Dispose(bool disposing)
     {
-        if (_mustNotFree)
-            return;
-
         var p = Interlocked.Exchange(ref _Value, IntPtr.Zero);
-        if (p != IntPtr.Zero)
+
+        if (!_mustNotFree && p != IntPtr.Zero)
             Marshal.FreeCoTaskMem(p);
     }
 
@@ -105,7 +107,7 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
     public static implicit operator PIDL(SafePIDL p)
         => p.Value;
 
-    public static SafePIDL Null { get; } = new SafePIDL(IntPtr.Zero, false);
+    public static SafePIDL Null { get; } = FromStatic(IntPtr.Zero);
 
     public bool IsNull
         => _Value == IntPtr.Zero;
@@ -148,7 +150,7 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
 
         while (enumIDList.Next(this, out var childPidl))
         {
-            if(token.HasValue && token.Value.IsCancellationRequested)
+            if (token.HasValue && token.Value.IsCancellationRequested)
                 yield break;
 
             yield return childPidl;
@@ -157,7 +159,7 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
 
     public static SafePIDL FromFilePath(string filePath)
     {
-        return new SafePIDL(Shell32.ILCreateFromPath(filePath));
+        return Create(Shell32.ILCreateFromPath(filePath));
     }
 
     public bool Equals(SafePIDL? other)
@@ -236,7 +238,7 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
         public SafeKnownFolderManager() : this((IKnownFolderManager)new KnownFolderManager()) { }
         private SafeKnownFolderManager(IKnownFolderManager value) : base(value) { }
 
-        public HRESULT FindFolderFromIDList(PIDL pidl, out IKnownFolder ppkf) 
+        public HRESULT FindFolderFromIDList(PIDL pidl, out IKnownFolder ppkf)
             => this.Instance.FindFolderFromIDList(pidl, out ppkf);
     }
 
@@ -257,7 +259,7 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
     }
 
     private static SafePIDL Combine(PIDL pidl1, PIDL pidl2)
-        => new SafePIDL(Shell32.ILCombine(pidl1, pidl2));
+        => Create(Shell32.ILCombine(pidl1, pidl2));
 
     public static Task<T> RunSTA<T>(Func<CancellationToken, T> func, CancellationToken token)
         => _staPool.RunAsync(func, token);
