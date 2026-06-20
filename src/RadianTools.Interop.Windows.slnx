@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RadianTools.Interop.Windows/RadianTools.Interop.Windows.csproj" />
+  <Project Path="UnmanagedStructGenerator/src/RadianTools.Generators.UnmanagedStructGenerator/UnmanagedStructGenerator.csproj" />
+</Solution>
