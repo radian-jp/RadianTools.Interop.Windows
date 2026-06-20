@@ -130,13 +130,13 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
         => InternalEnumChildsAsync(_SHCONTF.SHCONTF_FOLDERS | _SHCONTF.SHCONTF_NONFOLDERS, token);
 
     public Task<IEnumerable<SafePIDL>> EnumFoldersAsync(CancellationToken token)
-        => RunSTA(ct => EnumFolders(token), token);
+        => RunSTA(ct => EnumFolders(ct), token);
 
     public Task<IEnumerable<SafePIDL>> EnumFilesAsync(CancellationToken token)
-        => RunSTA(ct => EnumFiles(token), token);
+        => RunSTA(ct => EnumFiles(ct), token);
 
     public Task<IEnumerable<SafePIDL>> EnumAllChildsAsync(CancellationToken token)
-        => RunSTA(ct => EnumAllChilds(token), token);
+        => RunSTA(ct => EnumAllChilds(ct), token);
 
     private IEnumerable<SafePIDL> InternalEnumChildsAsync(_SHCONTF flags, CancellationToken? token)
     {
