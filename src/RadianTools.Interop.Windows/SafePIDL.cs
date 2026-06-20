@@ -26,6 +26,11 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
                 return _KnownFolderId.Value;
 
             _KnownFolderId = Guid.Empty;
+            if (IsNull)
+            {
+                return _KnownFolderId.Value;
+            }
+
             using var knownFolderManager = new SafeKnownFolderManager();
             if (knownFolderManager.FindFolderFromIDList(_Value, out var folder).IsNotOK)
                 return _KnownFolderId.Value;
@@ -107,7 +112,7 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
     public static implicit operator PIDL(SafePIDL p)
         => p.Value;
 
-    public static SafePIDL Null { get; } = FromStatic(IntPtr.Zero);
+    public static SafePIDL Null { get; } = FromStatic(PIDL.Null);
 
     public bool IsNull
         => _Value == IntPtr.Zero;
@@ -148,11 +153,8 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
         if (enumIDList == null)
             yield break;
 
-        while (enumIDList.Next(this, out var childPidl))
+        while (token?.IsCancellationRequested != true && enumIDList.Next(this, out var childPidl))
         {
-            if (token.HasValue && token.Value.IsCancellationRequested)
-                yield break;
-
             yield return childPidl;
         }
     }
@@ -247,7 +249,6 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
         var result = Shell32.SHGetPathFromIDListEx(Value, out var path, FileSystem.MAX_PATH, GPFIDL_FLAGS.GPFIDL_DEFAULT);
         return result ? path.ToString() : "";
     }
-
 
     private SafeShellFolder? CreateShellFolder()
     {
