@@ -33,4 +33,10 @@ public static class Shell32
 
     [DllImport("SHELL32.dll", SetLastError=true)]
     public static extern HRESULT SHGetKnownFolderIDList(in Guid rfid, uint dwFlags, HANDLE hToken, out PIDL ppidl);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern HRESULT SHGetNameFromIDList(
+        PIDL pidl,
+        SIGDN sigdnName,
+        out IntPtr ppszName);
 }

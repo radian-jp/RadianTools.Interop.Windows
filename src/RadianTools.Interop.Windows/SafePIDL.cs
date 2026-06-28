@@ -246,8 +246,32 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
 
     private string GetFilePath()
     {
-        var result = Shell32.SHGetPathFromIDListEx(Value, out var path, FileSystem.MAX_PATH, GPFIDL_FLAGS.GPFIDL_DEFAULT);
-        return result ? path.ToString() : "";
+        if (Shell32.SHGetPathFromIDListEx(
+            Value,
+            out var path,
+            FileSystem.MAX_PATH,
+            GPFIDL_FLAGS.GPFIDL_DEFAULT))
+        {
+            return path.ToString();
+        }
+
+        // ファイルシステムでない場合（ZIP内など）
+        if (Shell32.SHGetNameFromIDList(
+            Value,
+            SIGDN.DESKTOPABSOLUTEPARSING,
+            out var psz).IsOK)
+        {
+            try
+            {
+                return Marshal.PtrToStringUni((IntPtr)psz) ?? "";
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem((IntPtr)psz);
+            }
+        }
+
+        return "";
     }
 
     private SafeShellFolder? CreateShellFolder()
