@@ -13,12 +13,7 @@ public struct HRESULT
     public bool Failed => this.Value < 0;
     public bool IsOK => this.Value == 0;
     public bool IsNotOK => this.Value != 0;
-
-    public HRESULT ThrowOnFailure(IntPtr errorInfo = default)
-    {
-        Marshal.ThrowExceptionForHR(this.Value, errorInfo);
-        return this;
-    }
+    public void ThrowIfFailed() => Marshal.ThrowExceptionForHR(Value);
 }
 
 [StructLayout(LayoutKind.Sequential)]

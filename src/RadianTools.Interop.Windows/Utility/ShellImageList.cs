@@ -1,4 +1,5 @@
-﻿using System.Buffers;
+﻿using RadianTools.Interop.Windows.ComStructures;
+using System.Buffers;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
@@ -10,23 +11,27 @@ public class ShellImageList
 
     private readonly Dictionary<int, object> _cache = new();
 
-    private IImageList ImageList { get; }
+    private ComPtr<IImageList> _pImageList;
     public IntPtr Pointer { get; }
 
     private Converter _converter;
 
     public ShellImageList(SHIL shil, Converter converter)
     {
-        ImageList = GetSysImageList((uint)shil);
+        _pImageList = GetSysImageList((uint)shil);
         _converter = converter;
     }
 
     public HICON GetHIcon(int iconIndex)
     {
-        if (ImageList.GetIcon(iconIndex, 0, out var hIcon).IsNotOK)
-            throw new Win32Exception($"IImageList.GetIcon failed.");
+        unsafe
+        {
+            HICON hIcon;
+            if (_pImageList.Value->GetIcon(iconIndex, 0, &hIcon).IsNotOK)
+                throw new Win32Exception($"IImageList.GetIcon failed.");
 
-        return hIcon;
+            return hIcon;
+        }
     }
 
     public object GetIcon(int iconIndex)
@@ -34,9 +39,7 @@ public class ShellImageList
         if (_cache.TryGetValue(iconIndex, out var image))
             return image;
 
-        if (ImageList.GetIcon(iconIndex, 0, out var hIcon).IsNotOK)
-            throw new Win32Exception($"IImageList.GetIcon failed.");
-
+        var hIcon = GetHIcon(iconIndex);
         if( !User32.GetIconInfo(hIcon, out var iconInfo) )
             throw new Win32Exception($"GetIconInfo failed.");
 
@@ -82,10 +85,14 @@ public class ShellImageList
         }
     }
 
-    private static IImageList GetSysImageList(uint shil)
+    private static ComPtr<IImageList> GetSysImageList(uint shil)
     {
-        var iid = typeof(IImageList).GUID;
-        Shell32.SHGetImageList((int)shil, in iid, out var oImageList).ThrowOnFailure();
-        return (IImageList)oImageList;
+        unsafe
+        {
+            var iid = IImageList.IID;
+            ComPtr<IImageList> pImageList = new();
+            Shell32.SHGetImageList((int)shil, in iid, pImageList.Address).ThrowIfFailed();
+            return pImageList;
+        }
     }
 }

@@ -1,4 +1,5 @@
-﻿using RadianTools.Interop.Windows.Utility;
+﻿using RadianTools.Interop.Windows.ComStructures;
+using RadianTools.Interop.Windows.Utility;
 using System.Runtime.InteropServices;
 
 namespace RadianTools.Interop.Windows;
@@ -31,19 +32,20 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
                 return _KnownFolderId.Value;
             }
 
-            using var knownFolderManager = new SafeKnownFolderManager();
-            if (knownFolderManager.FindFolderFromIDList(_Value, out var folder).IsNotOK)
-                return _KnownFolderId.Value;
+            unsafe
+            {
+                using var pFolderManager = ComFactory.Create<IKnownFolderManager>(in CLSID.CLSID_KnownFolderManager);
+                ComPtr<IKnownFolder> pKnownFolder = new ();
+                if (pFolderManager.Value->FindFolderFromIDList(_Value, pKnownFolder.Address).IsNotOK)
+                    return _KnownFolderId.Value;
 
-            try
-            {
-                folder.GetId(out var folderId);
-                _KnownFolderId = folderId;
-                return _KnownFolderId.Value;
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(folder);
+                using(pKnownFolder)
+                {
+                    Guid folderId;
+                    pKnownFolder.Value->GetId(&folderId);
+                    _KnownFolderId = folderId;
+                    return _KnownFolderId.Value;
+                }
             }
         }
     }
@@ -146,14 +148,14 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
     private IEnumerable<SafePIDL> InternalEnumChildsAsync(_SHCONTF flags, CancellationToken? token)
     {
         using var shellFolder = CreateShellFolder();
-        if (shellFolder == null)
+        if (shellFolder == ComPtr<IShellFolder>.Null)
             yield break;
 
-        using var enumIDList = shellFolder.EnumObjects(HWND.Null, flags);
-        if (enumIDList == null)
+        using var enumIDList = EnumShellObjects(shellFolder, flags);
+        if (enumIDList == ComPtr<IEnumIDList>.Null)
             yield break;
 
-        while (token?.IsCancellationRequested != true && enumIDList.Next(this, out var childPidl))
+        while (token?.IsCancellationRequested != true && NextIDList(enumIDList, this, out var childPidl))
         {
             yield return childPidl;
         }
@@ -204,26 +206,24 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
         }
     }
 
-    private class SafeShellFolder : SafeCom<IShellFolder>
+    private static ComPtr<IEnumIDList> EnumShellObjects(ComPtr<IShellFolder> pShellFolder, _SHCONTF flags)
     {
-        public SafeShellFolder(IShellFolder value) : base(value) { }
-
-        public SafeEnumIDList? EnumObjects(HWND hwnd, _SHCONTF grfFlags)
+        unsafe
         {
-            if (Instance.EnumObjects(hwnd, (uint)grfFlags, out var enumIDList).IsNotOK)
-                return null;
+            ComPtr<IEnumIDList> pEnumIDList = new ();
+            if (pShellFolder.Value->EnumObjects(HWND.Null, flags, pEnumIDList.Address).IsNotOK)
+                return ComPtr<IEnumIDList>.Null;
 
-            return new SafeEnumIDList(enumIDList);
+            return pEnumIDList;
         }
     }
 
-    private class SafeEnumIDList : SafeCom<IEnumIDList>
+    private static bool NextIDList(ComPtr<IEnumIDList> pEnumIDList, SafePIDL parent, out SafePIDL pidl)
     {
-        public SafeEnumIDList(IEnumIDList value) : base(value) { }
-
-        public bool Next(SafePIDL parent, out SafePIDL pidl)
+        unsafe
         {
-            if (Instance.Next(1, out var childPidl).IsNotOK)
+            PIDL childPidl;
+            if (pEnumIDList.Value->Next(1, &childPidl, null).IsNotOK)
             {
                 pidl = Null;
                 return false;
@@ -233,15 +233,6 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
             Marshal.FreeCoTaskMem((IntPtr)childPidl);
             return true;
         }
-    }
-
-    private class SafeKnownFolderManager : SafeCom<IKnownFolderManager>
-    {
-        public SafeKnownFolderManager() : this((IKnownFolderManager)new KnownFolderManager()) { }
-        private SafeKnownFolderManager(IKnownFolderManager value) : base(value) { }
-
-        public HRESULT FindFolderFromIDList(PIDL pidl, out IKnownFolder ppkf)
-            => this.Instance.FindFolderFromIDList(pidl, out ppkf);
     }
 
     private string GetFilePath()
@@ -274,13 +265,17 @@ public class SafePIDL : IDisposable, IEquatable<SafePIDL>
         return "";
     }
 
-    private SafeShellFolder? CreateShellFolder()
+    private ComPtr<IShellFolder> CreateShellFolder()
     {
-        var iid = typeof(IShellFolder).GUID;
-        if (Shell32.SHBindToObject(IntPtr.Zero, Value, IntPtr.Zero, in iid, out var oShell).IsNotOK)
-            return null;
+        var iid = IShellFolder.IID;
+        unsafe
+        {
+            ComPtr<IShellFolder> shell = new();
+            if (Shell32.SHBindToObject(IntPtr.Zero, Value, IntPtr.Zero, in iid, (void**)shell.Address).IsNotOK)
+                return ComPtr<IShellFolder>.Null;
 
-        return new SafeShellFolder((IShellFolder)oShell);
+            return shell;
+        }
     }
 
     private static SafePIDL Combine(PIDL pidl1, PIDL pidl2)

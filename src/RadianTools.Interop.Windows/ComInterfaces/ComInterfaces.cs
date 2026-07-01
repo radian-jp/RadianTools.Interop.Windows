@@ -1,7 +1,7 @@
-﻿using System.Runtime.InteropServices;
-using RadianTools.Interop.Windows.Utility;
+﻿namespace RadianTools.Interop.Windows.ComInterfaces;
 
-namespace RadianTools.Interop.Windows;
+using System.Runtime.InteropServices;
+using RadianTools.Interop.Windows.Utility;
 
 [Guid("4DF0C730-DF9D-4AE3-9153-AA6B82E9795A"), ComImport()]
 public partial class KnownFolderManager
